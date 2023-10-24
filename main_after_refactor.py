@@ -5,10 +5,10 @@ import numpy as np
 import wave
 
 def config_x_axis_long_duration(axs, dur):
-        mins = np.arange(0, dur, 60)
-        axs.set_xticks(mins)
-        axs.set_xticklabels([f"{int(minute // 60)}:{int(minute % 60):02d}" for minute in mins])
-        axs.set_xlabel('Time (min)')
+    mins = np.arange(0, dur, 60)
+    axs.set_xticks(mins)
+    axs.set_xticklabels([f"{int(minute // 60)}:{int(minute % 60):02d}" for minute in mins])
+    axs.set_xlabel('Time (min)')
 
 def config_x_axis_medium_duration(axs, dur):
     five_sec_seq = np.arange(0, dur, 5)
