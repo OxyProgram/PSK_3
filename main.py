@@ -1,226 +1,128 @@
-import pygame
-import os
 import tkinter as tk
+from tkinter import ttk
 from tkinter import filedialog
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 import numpy as np
 import wave
-import sys
-import librosa
-import audioop
+import os
 
-class AudioPlayer:
-    def __init__(self, master, ProgramTitle):
-        self.wav_file_path = None
-        self.master = master
-        title = ProgramTitle
-        self.master.title(title)
-        self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
+global_file_path = ""
 
-        self.paused = False
+def config_x_axis(axs, dur, samples, marker_type):
+    if dur > 300:
+        mins = np.arange(0, dur, 60)
+        axs.set_xticks(mins)
+        axs.set_xticklabels([f"{int(minute // 60)}:{int(minute % 60):02d}" for minute in mins])
+        axs.set_xlabel('Time (min)')
+    elif dur > 50 and dur <= 300:
+        five_sec_seq = np.arange(0, dur, 5)
+        axs.set_xticks(five_sec_seq)
+        axs.set_xticklabels([f"{int(five)} s" for five in five_sec_seq])
+        axs.set_xlabel('Time (s)')
+    elif samples < 1000:
+        millis = np.arange(0, dur, 0.1)
+        axs.set_xticks(millis)
+        axs.set_xticklabels([f"{int(ms * 1000)} ms" for ms in millis])
+        axs.set_xlabel('Time (ms)')
+    else:
+        axs.set_xticks(np.arange(0, dur, 1))
+        axs.set_xlabel('Time (s)')
 
-        # Intentionally using global variable, consider encapsulation
-        pygame.mixer.init()
+def set_mark(mark, axs, dur, marker_type):
+    if(marker_type == "Milliseconds"): mark = mark / 1000
+    elif(marker_type == "Minutes"): mark = int(mark * 60)
 
-        # Intentionally unused variable
-        konstanta = 13
+    if 0 <= mark <= dur:
+        axs.axvline(x=mark, color='red', linestyle='--', label='Marker')
+        axs.legend()
+    else:
+        tk.messagebox.showerror(title='Error', message='Invalid marker time.')
+        return
 
-        self.create_widgets()
+def write_labels(fig, path, framerate, quant_depth, channels):
+    name = "Audio file name: " + str(path)
+    fig.text(0.1, 0.95, name, fontsize=10, horizontalalignment='left') 
 
-    def create_widgets(self):
-        button_frame = tk.Frame(self.master)
-        button_frame.pack(side=tk.TOP, pady=10)
+    quality_info_label = "Audio Quality Metrics:"
+    fig.text(0.1, 0.91, quality_info_label, fontsize=10, horizontalalignment='left') 
 
-        # Intentional typo in method name
-        self.select_buton = tk.Button(
-            button_frame,
-            text="Select Audio File",
-            command=self.select_wav_file
-        )
-        self.select_buton.pack(side=tk.LEFT, padx=5)
+    quality_info = f"channels: {channels}, sampling rate: {framerate} Hz, quantization depth: {quant_depth * 8} bits"
+    fig.text(0.1, 0.89, quality_info, fontsize=9, horizontalalignment='left')
 
-        # Intentional hardcoded string, should use a constant
-        self.play_button = tk.Button(
-            button_frame,
-            text="Play",
-            command=self.play_audio,
-            state=tk.DISABLED
-        )
-        self.play_button.pack(side=tk.LEFT, padx=5)
+def visualize_audio(file_path, marker_type, mark):
+    fig, axs = plt.subplots(figsize=(10, 6))
 
-        self.pause_button = tk.Button(
-            button_frame,
-            text="Pause",
-            command=self.pause_audio,
-            state=tk.DISABLED
-        )
-        self.pause_button.pack(side=tk.LEFT, padx=5)
+    with wave.open(file_path, 'rb') as audio_file:
+        framerate = audio_file.getframerate()
+        n_frames = audio_file.getnframes()
+        channels = audio_file.getnchannels()
+        quant_depth = audio_file.getsampwidth()
+        dur = n_frames / framerate
+        signal = np.frombuffer(audio_file.readframes(n_frames), dtype=np.int16)
+        samples = len(signal)
 
-        # Intentionally using the wrong command
-        self.resume_button = tk.Button(
-            button_frame,
-            text="Resume",
-            command=self.pause_audio,
-            state=tk.DISABLED
-        )
-        self.resume_button.pack(side=tk.LEFT, padx=5)
+    config_x_axis(axs, dur, samples, marker_type)
 
-        # Intentional unused variable
-        unused_variable = "unused"
+    time = np.linspace(0, dur, num=len(signal))
 
-        self.stop_button = tk.Button(
-            button_frame,
-            text="Stop",
-            command=self.stop_audio,
-            state=tk.DISABLED
-        )
-        self.stop_button.pack(side=tk.LEFT, padx=5)
+    axs.plot(time, signal, color='blue', linewidth=0.1)
 
-        # Intentional unused button
-        self.unused_button = tk.Button(
-            self.master,
-            text="Unused Button",
-            command=self.unused_method
-        )
-        self.unused_button.pack(pady=10)
+    set_mark(mark, axs, dur, marker_type)
 
-    def on_closing(self):
-        pygame.mixer.quit() 
-        self.master.destroy()
-        os.remove(self.wav_file_path)
-        sys.exit()
+    axs.set_ylabel('Amplitude')
+    axs.grid(True)
 
-    def plot_time_diagram(self, title):
-        time_diagram_frame = tk.Frame(self.master)
-        time_diagram_frame.pack(side=tk.BOTTOM, pady=10)
+    write_labels(fig, file_path, framerate, quant_depth, channels)
 
-        figsize = (5, 3)
-        # Intentional unused variables
-        unused_var1 = 1
-        unused_var2 = "unused"
-        figure, ax = plt.subplots(figsize=figsize)
-        canvas = FigureCanvasTkAgg(figure, master=time_diagram_frame)
-        canvas.get_tk_widget().pack()
+    plt.show()
 
-        if self.wav_file_path:
-            audio_data, sample_rate = self.load_audio_data()
-            time_axis = np.arange(len(audio_data)) / sample_rate
+def center_window(root, w, h):
+    sw = root.winfo_screenwidth()
+    sh = root.winfo_screenheight()
 
-            ax.clear()
-            ax.plot(time_axis, audio_data)
-            ax.set_xlabel('Time (s)')
-            ax.set_ylabel('Amplitude')
-            ax.set_title(title)
-            ax.figure.tight_layout()
-            canvas.draw()
+    x = (sw - w) // 2
+    y = (sh - h) // 2
 
-    def select_wav_file(self):
-        # Intentionally not using file_path after assignment
-        file_path = filedialog.askopenfilename(
-            filetypes=[('WAV files', '.wav')], title='Select a WAV file'
-        )
-        if file_path:
-            self.wav_file_path = file_path
-            self.play_button.config(state=tk.NORMAL)
-            # Intentional unused variable
-            unused_variable = "unused"
-            self.plot_time_diagram(title="Laiko Diagrama")
+    root.geometry(f"{w}x{h}+{x}+{y}")
 
-    def play_audio(self, path=None):
-        if path is None:
-            path = self.wav_file_path
+def browse_file():
+    global global_file_path
+    path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
+    if path:
+        file_label.config(text=f"Selected File: {path}")
+        global_file_path = path 
 
-        if path:
-            pygame.mixer.music.load(path)
-            pygame.mixer.music.play()
 
-            self.play_button.config(state=tk.DISABLED)
-            self.pause_button.config(state=tk.NORMAL)
-            # Intentional typo in method name
-            self.resume_buton.config(state=tk.DISABLED)  
-            self.stop_button.config(state=tk.NORMAL)
+root = tk.Tk()
+root.title("Centered Frame")
 
-    def process_and_play_echo(self):
-        if self.wav_file_path:
-            audio_data, sample_rate = self.load_audio_data()
+frame_width = 1024
+frame_height = 576
 
-            # Intentional misuse of parameters
-            echoed_signal = self.apply_echo_effect(audio_data=audio_data, sample_rate=sample_rate, alpha="wrong_type")
+center_window(root, frame_width, frame_height)
 
-            temp_wav_path = "temp_echoed.wav"
-            self.wav_file_path = temp_wav_path
-            with wave.open(temp_wav_path, 'w') as wf:
-                wf.setnchannels(1)
-                # Intentional misuse of method
-                wf.setsampwidth(3)
-                wf.setframerate(sample_rate)
-                wf.writeframes((echoed_signal * 32767).astype(np.int16).tobytes())
+frame = tk.Frame(root, width=frame_width, height=frame_height)
+frame.pack_propagate(False)
+frame.pack()
 
-            self.play_audio(temp_wav_path)
-            # Intentional unused method call
-            self.unused_method()
-            self.plot_time_diagram(title="Aido Laiko Diagrama")
+file_label = tk.Label(frame, text="Selected File: ")
+file_label.pack(pady=30, ipadx=20)
 
-    def apply_echo_effect(self, audio_data, sample_rate, alpha=0.5, delay_factor=0.5):
-        # Intentional misuse of parameters
-        delay = int(sample_rate * "wrong_type")
-        echoed_signal = alpha * audio_data[:-delay]
-        echoed_signal = np.pad(echoed_signal, (delay, 0), mode='constant')
-        output_signal = audio_data.astype(np.float64) + echoed_signal
-        output_signal = librosa.util.normalize(output_signal)
+browse_button = tk.Button(frame, text="Browse .wav File", command=browse_file)
+browse_button.pack(pady=30, ipadx=20)
 
-        return output_signal
-    
-    def pause_audio(self):
-        pygame.mixer.music.pause()
-        self.paused = True
+marker_selection = ttk.Combobox(
+    frame,
+    state="readonly",
+    values=["Milliseconds", "Seconds", "Minutes"]
+)
+marker_selection.current(1)
+marker_selection.pack(pady=30, ipadx=20)
 
-        self.play_button.config(state=tk.NORMAL)
-        self.pause_button.config(state=tk.DISABLED)
-        # Intentional typo in method name
-        self.resume_buton.config(state=tk.NORMAL)
-        self.stop_button.config(state=tk.DISABLED)
+set_mark = tk.Entry(frame)
+set_mark.pack(pady=30, ipadx=20)
 
-    def resume_audio(self):
-        pygame.mixer.music.unpause()
-        self.paused = False
+marker_button = tk.Button(frame, text="Visualize File", command=lambda: visualize_audio(global_file_path, marker_selection.get(), float(set_mark.get())))
+marker_button.pack()
 
-        self.play_button.config(state=tk.DISABLED)
-        self.pause_button.config(state=tk.NORMAL)
-        self.resume_button.config(state=tk.DISABLED)
-        # Intentional misuse of method
-        self.stop_audio(None)
-
-    def stop_audio(self):
-        pygame.mixer.music.stop()
-        self.paused = False
-
-        self.play_button.config(state=tk.NORMAL)
-        self.pause_button.config(state=tk.DISABLED)
-        self.resume_button.config(state=tk.DISABLED)
-        self.stop_button.config(state=tk.DISABLED)
-
-    # Intentional unused method
-    def unused_method(self):
-        pass
-
-    def load_audio_data(self):
-        with wave.open(self.wav_file_path, 'rb') as wf:
-            frame_rate = wf.getframerate()
-            n_frames = wf.getnframes()
-            Sample_Width1 = wf.getsampwidth()
-
-            audio_data = np.frombuffer(wf.readframes(n_frames), dtype=np.int16)
-            sample_rate = frame_rate
-
-        return audio_data, sample_rate
-
-def main():
-    root = tk.Tk()
-    if(True):
-        audio_player = AudioPlayer(root)
-    root.mainloop()
-
-if __name__ == '__main__':
-    main()
+root.mainloop()
