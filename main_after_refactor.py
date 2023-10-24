@@ -4,6 +4,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import wave
 
+def config_x_axis_long_duration(axs, dur):
+        mins = np.arange(0, dur, 60)
+        axs.set_xticks(mins)
+        axs.set_xticklabels([f"{int(minute // 60)}:{int(minute % 60):02d}" for minute in mins])
+        axs.set_xlabel('Time (min)')
+
+def config_x_axis_medium_duration(axs, dur):
+    five_sec_seq = np.arange(0, dur, 5)
+    axs.set_xticks(five_sec_seq)
+    axs.set_xticklabels([f"{int(five)} s" for five in five_sec_seq])
+    axs.set_xlabel('Time (s)')
+
+def config_x_axis_short_duration(axs, dur):
+    millis = np.arange(0, dur, 0.1)
+    axs.set_xticks(millis)
+    axs.set_xticklabels([f"{int(ms * 1000)} ms" for ms in millis])
+    axs.set_xlabel('Time (ms)')
+
 def config_x_axis(axs, dur, samples):
     if dur > 300:
         config_x_axis_long_duration(axs, dur)
@@ -14,24 +32,6 @@ def config_x_axis(axs, dur, samples):
     else:
         axs.set_xticks(np.arange(0, dur, 1))
         axs.set_xlabel('Time (s)')
-
-def config_x_axis_long_duration(axs, dur):
-    mins = np.arange(0, dur, 60)
-    axs.set_xticks(mins)
-    axs.set_xticklabels([f"{int(minute // 60)}:{int(minute % 60):02d}" for minute in mins])
-    axs.set_xlabel('Time (min)')
-
-def config_x_axis_medium_duration(axs, dur):
-    mins = np.arange(0, dur, 60)
-    axs.set_xticks(mins)
-    axs.set_xticklabels([f"{int(minute // 60)}:{int(minute % 60):02d}" for minute in mins])
-    axs.set_xlabel('Time (min)')
-
-def config_x_axis_short_duration(axs, dur):
-    mins = np.arange(0, dur, 60)
-    axs.set_xticks(mins)
-    axs.set_xticklabels([f"{int(minute // 60)}:{int(minute % 60):02d}" for minute in mins])
-    axs.set_xlabel('Time (min)')
 
 def set_mark(mark, axs, dur, marker_type):
     if marker_type == "Milliseconds":
@@ -44,7 +44,6 @@ def set_mark(mark, axs, dur, marker_type):
         axs.legend()
     else:
         tk.messagebox.showerror(title='Error', message='Invalid marker time.')
-        return
 
 def write_labels(fig, path, framerate, quant_depth, channels):
     name = "Audio file name: " + str(path)
@@ -63,7 +62,7 @@ def visualize_audio(file_path, marker_type, mark):
     samples = len(signal)
     dur = n_frames / framerate
     fig, axs = plt.subplots(figsize=(10, 6))
-    config_x_axis(axs, dur, samples, marker_type)
+    config_x_axis(axs, dur, samples)
     time = np.linspace(0, dur, num=len(signal))
     axs.plot(time, signal, color='blue', linewidth=0.1)
     set_mark(mark, axs, dur, marker_type)
@@ -78,9 +77,7 @@ def open_file(file_path):
         n_frames = audio_file.getnframes()
         channels = audio_file.getnchannels()
         quant_depth = audio_file.getsampwidth()
-        dur = n_frames / framerate
         signal = np.frombuffer(audio_file.readframes(n_frames), dtype=np.int16)
-        samples = len(signal)
     return framerate, n_frames, channels, quant_depth, signal
 
 def center_window(root, w, h):
